@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/jatin-dua/greenlight/internal/data"
 	_ "github.com/lib/pq"
 )
 
@@ -29,6 +30,7 @@ type config struct {
 type application struct {
 	config config
 	logger *log.Logger
+	models data.Models
 }
 
 // The openDB() function returns a sql.DB connection pool.
@@ -98,6 +100,7 @@ func main() {
 	app := &application{
 		config: cfg,
 		logger: logger,
+		models: data.NewModels(db),
 	}
 
 	srv := &http.Server{
