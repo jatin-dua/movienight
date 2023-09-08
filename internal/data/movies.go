@@ -2,6 +2,7 @@ package data
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/jatin-dua/greenlight/internal/validator"
@@ -76,7 +77,34 @@ func (m MovieModel) Insert(movie *Movie) error {
 
 // Add a placeholder method for fetching a specific record from the movies table.
 func (m MovieModel) Get(id int64) (*Movie, error) {
-	return nil, nil
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	var movie Movie
+
+	stmt := `SELECT id, created_at, title, year, runtime, genres, version
+		FROM movies 
+		WHERE id = $1`
+
+	err := m.DB.QueryRow(stmt, id).Scan(
+		&movie.ID,
+		&movie.CreatedAt,
+		&movie.Title,
+		&movie.Year,
+		&movie.Runtime,
+		pq.Array(&movie.Genres),
+		&movie.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &movie, nil
 }
 
 // Add a placeholder method for updating a specific record in the movies table.
