@@ -31,9 +31,9 @@ func (m MockMovieModel) Get(id int64) (*Movie, error) {
 	// Mock the action...
 	return nil, nil
 }
-func (m MockMovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+func (m MockMovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error) {
 	// Mock the action...
-	return nil, nil
+	return nil, Metadata{}, nil
 }
 func (m MockMovieModel) Update(movie *Movie) error {
 	// Mock the action...
@@ -115,9 +115,9 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 	return &movie, nil
 }
 
-func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
+func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, Metadata, error) {
 	// Use full-text search for the title filter.
-	query := fmt.Sprintf(`SELECT id, created_at, title, year, runtime, genres, version
+	query := fmt.Sprintf(`SELECT count(*) OVER(),id, created_at, title, year, runtime, genres, version
 	FROM movies
 	WHERE (to_tsvector('english', title) @@ plainto_tsquery('english', $1) OR $1 = '')
 	AND (genres @> $2 OR $2 = '{}')
@@ -134,14 +134,17 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 	args := []interface{}{title, pq.Array(genres), filters.limit(), filters.offset()}
 	rows, err := m.DB.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 	defer rows.Close()
 
+	// Declare a totalRecords variable.
+	totalRecords := 0
 	movies := []*Movie{}
 	for rows.Next() {
 		var movie Movie
 		err := rows.Scan(
+			&totalRecords,
 			&movie.ID,
 			&movie.CreatedAt,
 			&movie.Title,
@@ -152,16 +155,19 @@ func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*M
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 		movies = append(movies, &movie)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
-	return movies, nil
+	// Generate a Metadata struct, passing in the total record count and pagination
+	// parameters from the client.
+	metadata := calculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	return movies, metadata, nil
 }
 
 func (m MovieModel) Update(movie *Movie) error {
