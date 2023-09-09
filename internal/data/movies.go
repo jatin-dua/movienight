@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jatin-dua/greenlight/internal/validator"
@@ -116,11 +117,11 @@ func (m MovieModel) Get(id int64) (*Movie, error) {
 
 func (m MovieModel) GetAll(title string, genres []string, filters Filters) ([]*Movie, error) {
 	// Use full-text search for the title filter.
-	query := `SELECT id, created_at, title, year, runtime, genres, version
+	query := fmt.Sprintf(`SELECT id, created_at, title, year, runtime, genres, version
 	FROM movies
 	WHERE (to_tsvector('english', title) @@ plainto_tsquery('english', $1) OR $1 = '')
 	AND (genres @> $2 OR $2 = '{}')
-	ORDER BY id`
+	ORDER BY %s %s, id ASC`, filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
